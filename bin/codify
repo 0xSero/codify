@@ -143,7 +143,15 @@ if ! curl -sf "http://$BIND:$PORT/healthz" &>/dev/null; then
   exit 1
 fi
 
-PASSWORD=$(awk '/^password:/{print $2}' ~/.config/code-server/config.yaml 2>/dev/null || echo "(check config)")
+CONFIG="$HOME/.config/code-server/config.yaml"
+PASSWORD="(check $CONFIG)"
+for _ in $(seq 1 10); do
+  if [ -f "$CONFIG" ]; then
+    PASSWORD=$(awk '/^password:/{print $2}' "$CONFIG" 2>/dev/null || echo "(check $CONFIG)")
+    break
+  fi
+  sleep 1
+done
 
 echo "Ready!"
 echo ""
