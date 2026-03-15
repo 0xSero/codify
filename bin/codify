@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="0.1.0"
+PORT="${CODIFY_PORT:-8080}"
+BIND="${CODIFY_BIND:-127.0.0.1}"
+
+usage() {
+  cat <<EOF
+codify v$VERSION — open any codebase in the browser
+
+Usage:
+  codify [options] [directory]
+
+Options:
+  -p, --port PORT    Port to serve on (default: 8080, or \$CODIFY_PORT)
+  -s, --stop         Stop a running codify instance
+  -S, --status       Check if codify is running
+  -v, --version      Print version
+  -h, --help         Show this help
+
+Examples:
+  codify                  Open current directory
+  codify ~/projects/app   Open a specific project
+  codify -p 9000 .        Use a custom port
+  codify --stop           Stop the running instance
+
+Environment:
+  CODIFY_PORT   Default port (default: 8080)
+  CODIFY_BIND   Bind address (default: 127.0.0.1, never change to 0.0.0.0)
+EOF
+}
+
+open_url() {
+  local url="$1"
+  case "$(uname -s)" in
+    Darwin)  open "$url" ;;
+    Linux)   xdg-open "$url" 2>/dev/null || echo "Open: $url" ;;
+    MINGW*|MSYS*|CYGWIN*) start "$url" ;;
+    *)       echo "Open: $url" ;;
+  esac
+}
+
+url_encode() {
+  python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1" 2>/dev/null \
+    || echo "$1"
+}
+
+find_pid() {
+  lsof -iTCP:"$PORT" -sTCP:LISTEN -P -n 2>/dev/null | awk '/code-server/{print $2}' | head -1
+}
+
+do_stop() {
+  local pid
+  pid=$(find_pid)
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null && echo "Stopped code-server (PID $pid)" || echo "Failed to stop PID $pid"
+  else
+    echo "No codify instance found on port $PORT"
+  fi
+}
+
+do_status() {
+  local pid
+  pid=$(find_pid)
+  if [ -n "$pid" ]; then
+    echo "codify is running on port $PORT (PID $pid)"
+    echo "  http://$BIND:$PORT"
+  else
+    echo "codify is not running on port $PORT"
+  fi
+}
+
+# Parse arguments
+ACTION="start"
+DIR=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -p|--port) PORT="$2"; shift 2 ;;
+    -s|--stop) ACTION="stop"; shift ;;
+    -S|--status) ACTION="status"; shift ;;
+    -v|--version) echo "codify v$VERSION"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "Unknown option: $1"; usage; exit 1 ;;
+    *) DIR="$1"; shift ;;
+  esac
+done
+
+DIR="${DIR:-$(pwd)}"
+DIR="$(cd "$DIR" && pwd)"
+
+case "$ACTION" in
+  stop)   do_stop; exit 0 ;;
+  status) do_status; exit 0 ;;
+esac
+
+if ! command -v code-server &>/dev/null; then
+  echo "code-server is not installed."
+  echo ""
+  echo "Install it:"
+  echo "  brew install code-server          # macOS"
+  echo "  curl -fsSL https://code-server.dev/install.sh | sh   # Linux/macOS"
+  exit 1
+fi
+
+existing_pid=$(find_pid)
+if [ -n "$existing_pid" ]; then
+  echo "code-server already running on port $PORT (PID $existing_pid)"
+  open_url "http://$BIND:$PORT/?folder=$(url_encode "$DIR")"
+  exit 0
+fi
+
+if [ "$BIND" != "127.0.0.1" ] && [ "$BIND" != "localhost" ] && [ "$BIND" != "::1" ]; then
+  echo "WARNING: Binding to $BIND exposes code-server to the network."
+  echo "         Make sure you understand the security implications."
+  echo ""
+fi
+
+echo "Starting code-server on $BIND:$PORT"
+echo "  Directory: $DIR"
+code-server \
+  --bind-addr "$BIND:$PORT" \
+  --auth password \
+  --disable-telemetry \
+  "$DIR" &>/dev/null &
+
+CS_PID=$!
+disown "$CS_PID" 2>/dev/null
+
+echo "  PID: $CS_PID"
+echo ""
+
+echo "Waiting for code-server..."
+for _ in $(seq 1 30); do
+  if curl -sf "http://$BIND:$PORT/healthz" &>/dev/null; then
+    break
+  fi
+  sleep 1
+done
+
+if ! curl -sf "http://$BIND:$PORT/healthz" &>/dev/null; then
+  echo "code-server failed to start. Check logs with: code-server --help"
+  exit 1
+fi
+
+PASSWORD=$(awk '/^password:/{print $2}' ~/.config/code-server/config.yaml 2>/dev/null || echo "(check config)")
+
+echo "Ready!"
+echo ""
+echo "  URL:      http://$BIND:$PORT"
+echo "  Password: $PASSWORD"
+echo "  Stop:     codify --stop"
+echo ""
+echo "Security:"
+echo "  - Bound to $BIND only"
+echo "  - Password authentication enabled"
+echo "  - Telemetry disabled"
+
+open_url "http://$BIND:$PORT/?folder=$(url_encode "$DIR")"
