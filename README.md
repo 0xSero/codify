@@ -62,6 +62,20 @@ chmod +x ~/.factory/commands/codify.sh
 
 Then use `/codify` in any Droid session.
 
+## Droid Hook
+
+Auto-launch codify on every Droid session start:
+
+```sh
+cp hooks/codify-session.sh ~/.factory/hooks/codify-session.sh
+chmod +x ~/.factory/hooks/codify-session.sh
+```
+
+Then run `/hooks` in Droid and add a `SessionStart` hook with:
+```
+/Users/sero/.factory/hooks/codify-session.sh
+```
+
 ## License
 
 MIT
