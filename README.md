@@ -48,8 +48,8 @@ codify is secure by default:
 
 | Variable | Default | Description |
 |---|---|---|
-| `CODIFY_PORT` | `8080` | Port to serve on |
-| `CODIFY_BIND` | `127.0.0.1` | Bind address |
+| `CODIFY_PORT` | `8443` | Port to serve on |
+| `CODIFY_BIND` | `127.0.0.1` | Bind address (default is secure, never use 0.0.0.0) |
 
 ## Droid Integration
 
