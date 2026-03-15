@@ -120,7 +120,7 @@ echo "Starting code-server on $BIND:$PORT"
 echo "  Directory: $DIR"
 code-server \
   --bind-addr "$BIND:$PORT" \
-  --auth password \
+  --auth none \
   --disable-telemetry \
   "$DIR" &>/dev/null &
 
@@ -143,25 +143,13 @@ if ! curl -sf "http://$BIND:$PORT/healthz" &>/dev/null; then
   exit 1
 fi
 
-CONFIG="$HOME/.config/code-server/config.yaml"
-PASSWORD="(check $CONFIG)"
-for _ in $(seq 1 10); do
-  if [ -f "$CONFIG" ]; then
-    PASSWORD=$(awk '/^password:/{print $2}' "$CONFIG" 2>/dev/null || echo "(check $CONFIG)")
-    break
-  fi
-  sleep 1
-done
-
 echo "Ready!"
 echo ""
 echo "  URL:      http://$BIND:$PORT"
-echo "  Password: $PASSWORD"
 echo "  Stop:     codify --stop"
 echo ""
 echo "Security:"
-echo "  - Bound to $BIND only"
-echo "  - Password authentication enabled"
+echo "  - Bound to $BIND only (no network access)"
 echo "  - Telemetry disabled"
 
 open_url "http://$BIND:$PORT/?folder=$(url_encode "$DIR")"

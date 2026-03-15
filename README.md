@@ -40,7 +40,7 @@ codify --status           # check if running
 codify is secure by default:
 
 - Binds to `127.0.0.1` only (not reachable from network)
-- Password authentication enabled (password in `~/.config/code-server/config.yaml`)
+- No password required (localhost-only means no auth needed)
 - Telemetry disabled
 - Warns if you override the bind address
 
